@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PT Admin | Supreme Command</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap');
+        :root { --saffron: #ff9933; --bg-dark: #080a0f; }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: var(--bg-dark);
+            color: #ffffff; margin: 0; min-height: 100vh; overflow-x: hidden; 
+        }
+
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(25px); 
+            border: 1px solid rgba(255, 153, 51, 0.15); border-radius: 24px; 
+        }
+
+        .page-layer { display: none; flex-direction: column; min-height: 100vh; }
+        .page-layer.active { display: flex; animation: slideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+
+        .m-input { 
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 12px; padding: 14px; width: 100%; color: white; outline: none; font-weight: 700; transition: 0.3s; 
+        }
+        
+        .btn-saffron { background: linear-gradient(135deg, #ff9933, #cc5500); color: white; font-weight: 900; text-transform: uppercase; border-radius: 16px; padding: 16px; width: 100%; cursor: pointer; border: none; letter-spacing: 1px;}
+        .btn-green { background: #10b981; color: white; font-weight: 900; text-transform: uppercase; border-radius: 12px; padding: 12px; cursor: pointer; border: none; }
+        .btn-red { background: #e11d48; color: white; font-weight: 900; text-transform: uppercase; border-radius: 12px; padding: 12px; cursor: pointer; border: none; }
+
+        /* Virtual PIN Keyboard */
+        .btn-key { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; font-size: 24px; font-weight: 900; color: white; transition: 0.2s; }
+        .btn-key:active { background: var(--saffron); transform: scale(0.95); }
+        .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); }
+        .pin-dot.filled { background: var(--saffron); border-color: var(--saffron); box-shadow: 0 0 15px rgba(255, 153, 51, 0.5); }
+
+        #masterLoader, #customModal { position: fixed; inset: 0; background: rgba(8,10,15,0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;}
+
+        /* Salary Receipt Rendering */
+        .receipt-render { width: 210mm; background: white; color: #0f172a; padding: 15mm; border: 12px solid var(--saffron); position: relative; overflow: hidden; }
+        #hidden-receipt-wrapper { position: fixed; top: 0; left: 0; opacity: 0; z-index: -100; pointer-events: none; }
+        .paid-stamp { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 10px solid #e11d48; color: #e11d48; font-size: 80px; font-weight: 900; padding: 15px 30px; border-radius: 20px; opacity: 0.12; pointer-events: none; z-index: -1; }
+    </style>
+</head>
+<body>
+
+<div id="masterLoader">
+    <div class="w-16 h-16 border-4 border-white/5 border-t-[#ff9933] rounded-full animate-spin"></div>
+    <p class="text-[10px] text-[#ff9933] font-black mt-6 uppercase tracking-[0.5em]" id="loaderMsg">Processing...</p>
+</div>
+
+<div id="customModal">
+    <div class="glass-card p-10 max-w-sm w-full text-center">
+        <div id="modalIcon"></div>
+        <h2 id="modalTitle" class="text-2xl font-black uppercase text-white mb-4">--</h2>
+        <p id="modalMsg" class="text-[11px] font-bold text-white/60 uppercase tracking-widest leading-relaxed mb-8">--</p>
+        <button id="modalBtn" onclick="closeModal()" class="btn-saffron w-full">Acknowledged</button>
+    </div>
+</div>
+
+<div id="view-pin" class="page-layer active items-center justify-center p-6 h-screen">
+    <div class="glass-card p-10 max-w-sm w-full text-center">
+        <img src="https://i.ibb.co/C30Ybjck/PT-20250224-170650-0000.png" class="w-20 mx-auto mb-6 rounded-2xl">
+        <h2 class="text-xl font-black uppercase text-[#ff9933] mb-8 tracking-widest">Admin PIN Access</h2>
+        <div class="flex justify-center gap-6 mb-10">
+            <div class="pin-dot" id="dot-1"></div><div class="pin-dot" id="dot-2"></div><div class="pin-dot" id="dot-3"></div><div class="pin-dot" id="dot-4"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+            <button onclick="pressPin('1')" class="btn-key">1</button><button onclick="pressPin('2')" class="btn-key">2</button><button onclick="pressPin('3')" class="btn-key">3</button>
+            <button onclick="pressPin('4')" class="btn-key">4</button><button onclick="pressPin('5')" class="btn-key">5</button><button onclick="pressPin('6')" class="btn-key">6</button>
+            <button onclick="pressPin('7')" class="btn-key">7</button><button onclick="pressPin('8')" class="btn-key">8</button><button onclick="pressPin('9')" class="btn-key">9</button>
+            <button onclick="clearPin()" class="btn-key text-rose-500">C</button><button onclick="pressPin('0')" class="btn-key">0</button><button onclick="backspacePin()" class="btn-key text-blue-400">⌫</button>
+        </div>
+    </div>
+</div>
+
+<div id="view-dashboard" class="page-layer">
+    <nav class="p-6 border-b border-white/5 bg-black/50 flex flex-col md:flex-row gap-4 justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-4">
+            <img src="https://i.ibb.co/C30Ybjck/PT-20250224-170650-0000.png" class="w-12 rounded-xl">
+            <div><h1 class="text-xl font-black italic uppercase leading-none text-[#ff9933]">PT Admin Vault</h1><p class="text-[9px] font-bold text-white/40 uppercase tracking-widest">Master Control Panel</p></div>
+        </div>
+        <div class="flex gap-2 w-full md:w-auto">
+            <button onclick="switchTab('kyc')" class="flex-1 bg-white/10 px-4 py-3 rounded-lg text-xs font-black uppercase hover:bg-[#ff9933] transition">KYC Hub</button>
+            <button onclick="switchTab('salary')" class="flex-1 bg-white/10 px-4 py-3 rounded-lg text-xs font-black uppercase hover:bg-[#ff9933] transition">Salary Engine</button>
+            <button onclick="location.reload()" class="bg-rose-500/20 text-rose-500 px-4 py-3 rounded-lg text-xs font-black uppercase">Lock</button>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto p-6 w-full">
+        <div id="tab-kyc" class="space-y-6">
+            <div class="flex justify-between items-end mb-8 border-b border-white/10 pb-4">
+                <div><h2 class="text-2xl font-black uppercase text-white italic">Verification Vault</h2><p class="text-[10px] text-[#ff9933] font-bold uppercase tracking-widest">Pending Approvals</p></div>
+                <button onclick="initAdmin()" class="text-[9px] bg-white/5 px-4 py-2 rounded-lg uppercase font-black border border-white/10">↻ Sync Database</button>
+            </div>
+            <div id="kycGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <div id="tab-salary" class="hidden space-y-6">
+            <div class="mb-8 border-b border-white/10 pb-4"><h2 class="text-2xl font-black uppercase text-white">Live Salary Engine</h2><p class="text-[10px] text-[#ff9933] font-bold uppercase tracking-widest">Generate Verified Slips</p></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <div class="glass-card p-8 space-y-5">
+                    <select id="sWorker" class="m-input !bg-[#121620]" onchange="updateLivePreview()"><option value="" disabled selected>Select Verified Labor...</option></select>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="month" id="sMonth" class="m-input" onchange="updateLivePreview()">
+                        <input type="number" id="sDays" placeholder="Work Days" class="m-input" oninput="updateLivePreview()">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="number" id="sBasic" placeholder="Basic Pay (₹)" class="m-input" oninput="updateLivePreview()">
+                        <input type="number" id="sOvertime" placeholder="OT Pay (₹)" class="m-input" oninput="updateLivePreview()">
+                    </div>
+                    <input type="number" id="sAdvance" placeholder="Advance Deductions (₹)" class="m-input text-rose-500" oninput="updateLivePreview()">
+                    <div class="bg-emerald-500/10 p-5 rounded-xl border border-emerald-500/30 flex justify-between items-center"><p class="text-[10px] uppercase font-black text-emerald-500">Disbursable Amount</p><h2 id="sNet" class="text-3xl font-black text-white italic">₹ 0</h2></div>
+                    <button onclick="generateAndDisburse()" class="btn-saffron w-full">Generate & Disburse 🚀</button>
+                </div>
+                <div class="glass-card p-8 flex items-center justify-center bg-white/5">
+                    <div class="w-full bg-white p-8 rounded-xl text-black shadow-2xl scale-90 relative">
+                        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[15deg] border-4 border-rose-500 text-rose-500 text-2xl font-black px-4 py-1 rounded-lg opacity-10 uppercase">SALARY PAID</div>
+                        <h2 class="text-2xl font-black uppercase border-b-4 border-black pb-2 mb-4">Patel Traders</h2>
+                        <div class="flex justify-between text-xs font-black mb-4"><span id="pName">Worker Name</span> <span id="pMonth" class="text-[#ff9933]">MM/YYYY</span></div>
+                        <div class="space-y-2 text-xs font-bold border-y py-4 mb-4">
+                            <div class="flex justify-between"><span>Salary Amount</span><span id="pBasic">₹ 0</span></div>
+                            <div class="flex justify-between text-red-600"><span>Deductions</span><span id="pDed">- ₹ 0</span></div>
+                        </div>
+                        <div class="flex justify-between items-center bg-gray-100 p-4 rounded-lg font-black"><span class="text-[10px] uppercase">Net Total</span><span id="pTotal" class="text-xl">₹ 0</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="hidden-receipt-wrapper">
+    <div id="receipt-render" class="receipt-render">
+        <div class="paid-stamp">SALARY PAID</div>
+        <div class="flex justify-between border-b-8 pb-10 border-slate-900">
+            <img src="https://i.ibb.co/C30Ybjck/PT-20250224-170650-0000.png" class="w-24 h-24 rounded-2xl">
+            <div class="text-right uppercase"><h1 class="text-4xl font-black text-slate-900 tracking-tighter">Patel Traders</h1><p class="text-[10px] font-bold text-slate-500 mt-1">Official Payment Voucher</p></div>
+        </div>
+        <div class="my-10 border-l-4 border-[#ff9933] pl-6"><p class="text-slate-400 text-[10px] tracking-widest">STAFF PROFILE</p><h3 id="pdfName" class="text-3xl font-black italic mt-1">--</h3><p id="pdfAadhaar" class="text-xs text-slate-500 mt-2">ID: ************</p></div>
+        <div class="border-y-2 border-slate-200 py-8 space-y-4 font-black text-xl text-slate-800 uppercase">
+            <div class="flex justify-between"><span>Basic Remuneration</span><span id="pdfBasic">₹ 0</span></div>
+            <div class="flex justify-between text-red-600"><span>Advance/Adjustments</span><span id="pdfDed">- ₹ 0</span></div>
+        </div>
+        <div class="mt-12 p-10 bg-slate-900 rounded-[30px] flex justify-between items-center text-white">
+            <div><p class="text-[10px] uppercase font-black opacity-50">Grand Total Disbursed</p><h2 id="pdfTotal" class="text-5xl font-black italic text-[#ff9933]">₹ 0</h2></div>
+            <div class="text-right text-xs opacity-50 uppercase font-black">Verified By Patel Traders</div>
+        </div>
+        <p class="text-center text-[10px] font-black uppercase text-slate-300 mt-10">System Generated Document | Labor Vault V62.0</p>
+    </div>
+</div>
+
+<script>
+    // 🔗 SYNCED URL (V59/60 Master Backend)
+    const SHEET_URL = "https://script.google.com/macros/s/AKfycbwTtZpvCivalIGGonhbp4Mnt4-ffQOIyRGU5O1a9O-B2dNSgI_w7unKYsIaq835U-Ag/exec";
+    const DRIVE_URL = "https://script.google.com/macros/s/AKfycbzRtL9RKXNPtwnm_HwMQfrS-Ycr6wsC3Y5Cxaz1paaiP8YWvzj8-meb-1YuUkZ7h5z5/exec";
+    
+    let currentPin = "";
+    const ADMIN_PIN = "7314";
+    let allUsers = [];
+
+    // --- PIN LOGIC ---
+    function pressPin(num) {
+        if(currentPin.length < 4) {
+            currentPin += num;
+            updatePinDots();
+            if(currentPin.length === 4) {
+                setTimeout(() => {
+                    if(currentPin === ADMIN_PIN) {
+                        document.getElementById('view-pin').classList.remove('active');
+                        document.getElementById('view-dashboard').classList.add('active');
+                        initAdmin();
+                    } else {
+                        showModal('error', 'Wrong PIN', 'Unauthorized Access Denied.');
+                        clearPin();
+                    }
+                }, 200);
+            }
+        }
+    }
+    function updatePinDots() { for(let i=1; i<=4; i++) document.getElementById(`dot-${i}`).classList.toggle('filled', i <= currentPin.length); }
+    function backspacePin() { currentPin = currentPin.slice(0, -1); updatePinDots(); }
+    function clearPin() { currentPin = ""; updatePinDots(); }
+
+    function switchTab(tab) {
+        document.getElementById('tab-kyc').classList.add('hidden');
+        document.getElementById('tab-salary').classList.add('hidden');
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    }
+
+    function toggleLoader(s, t) { 
+        if(t) document.getElementById('loaderMsg').innerText = t;
+        document.getElementById('masterLoader').style.display = s ? 'flex' : 'none'; 
+    }
+
+    function showModal(type, title, msg) {
+        const modal = document.getElementById('customModal');
+        const icon = document.getElementById('modalIcon');
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalMsg').innerText = msg;
+        icon.innerHTML = type === 'error' ? '✕' : '✓';
+        icon.className = `w-16 h-16 border-2 flex items-center justify-center mx-auto mb-4 rounded-full text-4xl font-black ${type === 'error' ? 'border-rose-500 text-rose-500' : 'border-emerald-500 text-emerald-500'}`;
+        modal.style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('customModal').style.display = 'none'; }
+
+    // --- DATA FETCHING ---
+    async function initAdmin() {
+        toggleLoader(true, "Synchronizing Vault...");
+        try {
+            const res = await fetch(`${SHEET_URL}?Action=getUsers&Sheet=Labor_DB`);
+            allUsers = await res.json();
+            renderKYC();
+            loadApprovedLabors();
+        } catch(e) { console.error(e); }
+        toggleLoader(false);
+    }
+
+    function renderKYC() {
+        const grid = document.getElementById('kycGrid');
+        const pending = allUsers.filter(u => (u.Status || u.status) === "Pending");
+        
+        grid.innerHTML = pending.map(u => `
+            <div class="glass-card p-6 flex flex-col justify-between hover:bg-white/5 transition border-white/5" id="card-${u.Mobile}">
+                <div>
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-xl font-black uppercase text-[#ff9933] italic">${u.Name || u.name}</h3>
+                        <span class="text-[9px] bg-white/10 px-2 py-1 rounded text-white/40 font-black">${u.Designation || u.designation}</span>
+                    </div>
+                    <div class="bg-black/20 p-4 rounded-xl text-[10px] font-bold space-y-2 mb-6 border border-white/5">
+                        <p class="flex justify-between opacity-60 uppercase"><span>Mobile:</span> <span class="text-white">${u.Mobile || u.ph}</span></p>
+                        <p class="flex justify-between opacity-60 uppercase"><span>Aadhaar:</span> <span class="text-white">${u.AadhaarNo || u.aadhaarNo}</span></p>
+                        <p class="flex justify-between opacity-60 uppercase"><span>PAN:</span> <span class="text-white">${u.PanNo || u.panNo}</span></p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-6">
+                        <a href="${u.AadhaarFront || u.aadhaarFront}" target="_blank" class="bg-blue-500/10 text-blue-400 p-2 rounded-lg text-[9px] text-center font-black uppercase border border-blue-500/20">Aadhaar Front</a>
+                        <a href="${u.AadhaarBack || u.aadhaarBack}" target="_blank" class="bg-blue-500/10 text-blue-400 p-2 rounded-lg text-[9px] text-center font-black uppercase border border-blue-500/20">Aadhaar Back</a>
+                        <a href="${u.PanScan || u.panScan}" target="_blank" class="col-span-2 bg-emerald-500/10 text-emerald-400 p-2 rounded-lg text-[9px] text-center font-black uppercase border border-emerald-500/20">View PAN Document</a>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="updateStatus('${u.Mobile || u.ph}', 'Approved')" class="btn-green flex-1 text-[10px]">Approve ✓</button>
+                    <button onclick="updateStatus('${u.Mobile || u.ph}', 'Rejected')" class="btn-red flex-1 text-[10px]">Reject ✕</button>
+                </div>
+            </div>
+        `).join('') || `<div class="col-span-3 text-center p-20 glass-card opacity-20 uppercase font-black italic">No Pending Verifications</div>`;
+    }
+
+    async function updateStatus(mobile, status) {
+        toggleLoader(true, `Broadcasting ${status} Status...`);
+        try {
+            // UI से तुरंत कार्ड हटाओ
+            const card = document.getElementById(`card-${mobile}`);
+            if(card) card.style.display = 'none';
+
+            // बैकएंड को डेटा भेजो
+            await fetch(SHEET_URL, { 
+                method: 'POST', mode: 'no-cors', 
+                body: JSON.stringify({ Action: "UpdateStatus", Mobile: mobile, Status: status, TargetSheet: "Labor_DB" }) 
+            });
+            
+            showModal('success', 'Status Synced', `Worker is now marked as ${status}.`);
+            setTimeout(initAdmin, 2000); // डेटा रिफ्रेश
+        } catch(e) { toggleLoader(false); }
+    }
+
+    function loadApprovedLabors() {
+        const approved = allUsers.filter(u => (u.Status || u.status) === "Approved");
+        const select = document.getElementById('sWorker');
+        select.innerHTML = `<option value="" disabled selected>Select Verified Labor...</option>` + 
+            approved.map(u => `<option value='${JSON.stringify(u)}'>${u.Name || u.name} - ${u.Mobile || u.ph}</option>`).join('');
+    }
+
+    function updateLivePreview() {
+        const val = document.getElementById('sWorker').value;
+        if(!val) return;
+        const u = JSON.parse(val);
+        const b = parseFloat(document.getElementById('sBasic').value) || 0;
+        const o = parseFloat(document.getElementById('sOvertime').value) || 0;
+        const a = parseFloat(document.getElementById('sAdvance').value) || 0;
+        const net = b + o - a;
+        document.getElementById('sNet').innerText = `₹ ${net}`;
+        document.getElementById('pName').innerText = u.Name || u.name;
+        document.getElementById('pMonth').innerText = document.getElementById('sMonth').value || 'MM/YYYY';
+        document.getElementById('pBasic').innerText = `₹ ${b + o}`;
+        document.getElementById('pDed').innerText = `- ₹ ${a}`;
+        document.getElementById('pTotal').innerText = `₹ ${net}`;
+    }
+
+    async function generateAndDisburse() {
+        const val = document.getElementById('sWorker').value;
+        const month = document.getElementById('sMonth').value;
+        if(!val || !month) return showModal('error', 'Wait', 'Select labor and month first.');
+        const u = JSON.parse(val);
+        const b = parseFloat(document.getElementById('sBasic').value) || 0;
+        const o = parseFloat(document.getElementById('sOvertime').value) || 0;
+        const a = parseFloat(document.getElementById('sAdvance').value) || 0;
+        const net = b + o - a;
+
+        toggleLoader(true, "Forging Payment Voucher...");
+        
+        // PDF/Image Template Filling
+        document.getElementById('pdfName').innerText = u.Name || u.name;
+        document.getElementById('pdfAadhaar').innerText = `ID: ${u.AccountNo || 'PT-ADMIN'}`;
+        document.getElementById('pdfBasic').innerText = `₹ ${b + o}`;
+        document.getElementById('pdfDed').innerText = `- ₹ ${a}`;
+        document.getElementById('pdfTotal').innerText = `₹ ${net}`;
+
+        setTimeout(async () => {
+            const canvas = await html2canvas(document.getElementById('receipt-render'), { scale: 2 });
+            const imgData = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+            try {
+                // 1. Upload to Drive
+                const driveRes = await fetch(DRIVE_URL, { method: 'POST', body: JSON.stringify({ documentType: "SALARY", fileName: `Salary_${u.Name}_${month}.jpg`, base64: imgData }) });
+                const dJson = await driveRes.json();
+                
+                // 2. Log to Sheet
+                await fetch(SHEET_URL, { 
+                    method: 'POST', mode: 'no-cors', 
+                    body: JSON.stringify({ 
+                        Action: "SalaryLog", 
+                        TargetSheet: "Salary_Vault", 
+                        Name: u.Name || u.name, 
+                        AadhaarNo: u.AadhaarNo || u.aadhaarNo, 
+                        Month: month, 
+                        Amount: `₹${net}`, 
+                        ReceiptLink: dJson.fileUrl 
+                    }) 
+                });
+                
+                showModal('success', 'Disbursed', 'Salary receipt is now live on worker dashboard.');
+                initAdmin();
+            } catch(e) { toggleLoader(false); }
+            toggleLoader(false);
+        }, 800);
+    }
+</script>
+</body>
+</html>
